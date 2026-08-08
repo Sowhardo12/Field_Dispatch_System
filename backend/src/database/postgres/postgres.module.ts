@@ -1,6 +1,9 @@
-import { Module, Global, OnApplicationShutdown, Inject } from '@nestjs/common';
+import { Module, Global, OnApplicationShutdown,OnModuleInit, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
+import * as fs from 'fs';
+import * as path from 'path';
+
 
 export const PG_CONNECTION = 'PG_CONNECTION';
 
@@ -23,9 +26,16 @@ export const PG_CONNECTION = 'PG_CONNECTION';
   ],
   exports: [PG_CONNECTION],
 })
-export class PostgresModule implements OnApplicationShutdown {
+export class PostgresModule implements OnModuleInit, OnApplicationShutdown {
   constructor(@Inject(PG_CONNECTION) private readonly pool: Pool) {}
 
+  async onModuleInit() {
+      const schemaPath = path.join(__dirname,'init.sql')
+      if(fs.existsSync(schemaPath)){
+        const sql = fs.readFileSync(schemaPath,'utf-8')
+        await this.pool.query(sql)
+      }
+  }
   async onApplicationShutdown() {
     await this.pool.end();
   }

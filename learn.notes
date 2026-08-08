@@ -1,0 +1,29 @@
+we kept using @Injectable() over classes, why? 
+ans: Dependency Injection
+
+example: 
+UserModule.ts file 
+
+@Module({
+  providers: [UsersRepository]
+})
+export class UsersModule {}      //have UsersRepository stored in the providers 
+
+1. Nest comes accross this code: 
+
+@Injectable()
+export class UsersService {
+  constructor(
+    private readonly usersRepository: UsersRepository
+  ) {}
+}
+
+2. Nest Needs userRepository (instance of that class UsersRepository)
+3. Nest sees UsersRepository inside the Providers in the module file [line 7]
+4. Nest registers it in DI container
+5. Nest created userRepository instance from the class userRepository
+6. Nest Injects it inside the UsersService class where it is needed. [line 13]
+
+no need to create the instances manually inside the classes by developers. 
+
+
