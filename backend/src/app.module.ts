@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PostgresModule } from './database/postgres/postgres.module';
 import { AppController } from './app.controller';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { AppController } from './app.controller';
         uri: configService.get<string>('MONGO_URI'),
       }),
       inject: [ConfigService],
-    }),
+    }),AuthModule,
   ],
   controllers: [AppController],
 })
