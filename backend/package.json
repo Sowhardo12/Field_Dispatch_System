@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@nestjs/bull": "^11.0.5",
     "@nestjs/bullmq": "^11.0.5",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
@@ -84,8 +85,8 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
-     "moduleNameMapper": {
-      "^src/(.*)$": "<rootDir>/src/$1" 
+    "moduleNameMapper": {
+      "^src/(.*)$": "<rootDir>/src/$1"
     }
   }
 }
