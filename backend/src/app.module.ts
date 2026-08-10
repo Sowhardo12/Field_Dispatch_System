@@ -4,6 +4,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { PostgresModule } from './database/postgres/postgres.module';
 import { AppController } from './app.controller';
 import { AuthModule } from './modules/auth/auth.module';
+import { WorkOrdersModule } from './modules/work-orders/work-orders.module';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { AuthModule } from './modules/auth/auth.module';
         uri: configService.get<string>('MONGO_URI'),
       }),
       inject: [ConfigService],
-    }),AuthModule,
+    }),AuthModule,WorkOrdersModule,
   ],
   controllers: [AppController],
 })

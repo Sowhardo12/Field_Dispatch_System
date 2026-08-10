@@ -17,3 +17,21 @@ curl -X POST http://localhost:3000/api/v1/auth/register \
   docker exec -it dispatch_postgres psql -U postgres -d dispatch_db
   navigate: \dt    -show tables 
 
+
+
+FLOW: 
+
+1. Client Creates order status: CREATED
+2. Admin/Dispatcher accepts and dispatches status: DISPATCHED 
+3. Assigned to a technician status: OFFERED    
+4. Technician accepts the order status: IN_PROGRESS    /accept
+5. Completed the work status: COMPLETED 
+6. finalized by Client or Admin status: CLOSED 
+
+
+
+logic Decision: in workorder service, when technician wants to accept an order
+what cases should he consider ? 
+
+solution : the technician should only care if the order status is OFFERED, in any
+other case, the code should throw an error. 
