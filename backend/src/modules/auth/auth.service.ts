@@ -46,6 +46,13 @@ export class AuthService {
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.password_hash);
+    //explanation sudocode 
+    //1. const {SALT, HashingInfo} = getFrom(user.password_hash)
+    //2. const newHash = bcrypt.hash(dto.password,SALT)
+    //3. compare (newHash, user.password_hash) ? VALID : Refuse 
+
+
+
     if (!isPasswordValid) {
       throw new UnauthorizedException({
         success: false,
