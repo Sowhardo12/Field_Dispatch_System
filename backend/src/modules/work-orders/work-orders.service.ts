@@ -5,18 +5,22 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { InjectQueue } from '@nestjs/bull';
 import { Model } from 'mongoose';
+import type { Queue } from 'bull';
 import { WorkOrdersRepository } from './work-orders.repository';
 import { CreateWorkOrderDto, QueryWorkOrderDto } from './dto/work-order.dto';
 import { WorkOrderStatus, UserRole } from '../../common/interfaces/domain.interface';
 // import { WorkLog, WorkLogDocument } from 'src/execution-logs/schemas/work-log-schema';
 import { WorkLog, WorkLogDocument } from 'src/execution-logs/schema/work-log-schema';
+import { WORK_ORDER_QUEUE, AUTO_ASSIGN_JOB } from './assignment.processor';
 import { privateDecrypt } from 'crypto';
 
 @Injectable()
 export class WorkOrdersService{
   constructor(private readonly workOrdersRepository : WorkOrdersRepository,
     @InjectModel(WorkLog.name) private readonly workLogModel: Model<WorkLogDocument>,
+    @InjectQueue(WORK_ORDER_QUEUE) private readonly assignmentQueue: Queue,
   ) {}
   async createWorkOrder(clientId : number, dto: CreateWorkOrderDto){
     return this.workOrdersRepository.create(dto.title,dto.description,clientId);
@@ -37,6 +41,25 @@ export class WorkOrdersService{
     }
     return order;
   }
+  // async dispatchWorkOrder(id:number){
+  //   const order = await this.findOne(id);
+  //   if(order.status!==WorkOrderStatus.CREATED){
+  //     throw new BadRequestException({
+  //       success: false,
+  //       data: null,
+  //       error: {
+  //         code: 'INVALID_STATE_TRANSITION',
+  //         message: `Cannot dispatch work order in state ${order.status}. Must be CREATED.`,
+  //         details: [],
+  //       },
+  //       timestamp: new Date().toISOString(),
+  //     });
+  //   }
+
+  //   // this.workOrdersRepository.updateStatus(id,WorkOrderStatus.DISPATCHED);
+  //   await this.workOrdersRepository.updateStatus(id,WorkOrderStatus.DISPATCHED);
+  // }
+
   async dispatchWorkOrder(id:number){
     const order = await this.findOne(id);
     if(order.status!==WorkOrderStatus.CREATED){
@@ -52,8 +75,20 @@ export class WorkOrdersService{
       });
     }
 
-    // this.workOrdersRepository.updateStatus(id,WorkOrderStatus.DISPATCHED);
-    await this.workOrdersRepository.updateStatus(id,WorkOrderStatus.DISPATCHED);
+    //queue logic
+    const updatedOrder = await this.workOrdersRepository.updateStatus(id,WorkOrderStatus.DISPATCHED);
+    await this.assignmentQueue.add(
+      AUTO_ASSIGN_JOB,
+      {workOrderId:id},
+      {
+        attempts:5,
+        backoff:{
+          type:'exponential',delay:2000,
+        },removeOnComplete: true,
+      }
+    );
+    return updatedOrder;
+    
   }
 
   async acceptWorkOrder(id:number,technician_id:number){
