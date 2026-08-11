@@ -1,17 +1,8 @@
 /backend 
+npm run start:dev   -> run backend 
+docker-compose up   -> wake up containers
 npm run test
 npm run test:e2e (check db conn, for 2nd time will face error: do : docker-compose down -v)
-
-registering : 
-curl -X POST http://localhost:3000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "dispatcher@example.com",
-    "password": "securepassword123",
-    "full_name": "Dispatcher One",
-    "role": "DISPATCHER"
-  }'
-
 
   check in running postgres container : 
   docker exec -it dispatch_postgres psql -U postgres -d dispatch_db
@@ -22,7 +13,7 @@ curl -X POST http://localhost:3000/api/v1/auth/register \
 FLOW: 
 
 1. Client Creates order status: CREATED
-2. Admin/Dispatcher accepts and dispatches status: DISPATCHED 
+2. Admin/Dispatcher accepts and dispatches status: DISPATCHED   -> add to queue  -> processor accepts the work and processes  ->
 3. Assigned to a technician status: OFFERED    
 4. Technician accepts the order status: IN_PROGRESS    /accept
 5. Completed the work status: COMPLETED 
@@ -48,7 +39,7 @@ The issue was that NestJS couldn't resolve the PG_CONNECTION dependency for Post
 
 API documentation:  example data is given only
 ################################################################################
-Register :  TESTED
+Register : 
 url : localhost:3000/api/v1/auth/register
 body: { email: 'client_e2e@test.com', password: 'password123', full_name: 'Client E2E', role: 'CLIENT' }
 
@@ -74,7 +65,7 @@ curl -X POST localhost:3000/api/v1/auth/register \
 
 
 ################################################################################
-Login:  TESTED
+Login:
 url:  localhost:3000/api/v1/auth/login
 body: { email: 'dispatcher_e2e@test.com', password: 'password123' }
 
