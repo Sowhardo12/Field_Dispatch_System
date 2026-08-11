@@ -32,6 +32,12 @@ export class WorkOrdersController{
     @CurrentUser('id') clientId:number,
     @Body() dto: CreateWorkOrderDto,
   ){
+
+    console.log('=== DEBUG ===');
+    console.log('clientId value:', clientId);
+    console.log('clientId type:', typeof clientId);
+    console.log('dto:', dto);
+    console.log('=== END DEBUG ===');
     const data = await this.workOrdersService.createWorkOrder(clientId,dto);
     return {
       success: true,
