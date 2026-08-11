@@ -70,7 +70,7 @@ export class AuthService {
     return {
       access_token: accessToken,
       token_type: 'Bearer',
-      expires_in: 86400,
+      expires_in: 86400,    //for development, we take 24 hours token validity
       user: userWithoutPassword,
     };
   }

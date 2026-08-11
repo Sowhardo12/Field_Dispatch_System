@@ -61,6 +61,7 @@ export class WorkOrdersService{
   //   await this.workOrdersRepository.updateStatus(id,WorkOrderStatus.DISPATCHED);
   // }
 
+  //CREATED TO DISPATCHED
   async dispatchWorkOrder(id:number){
     const order = await this.findOne(id);
     if(order.status!==WorkOrderStatus.CREATED){
@@ -92,6 +93,11 @@ export class WorkOrdersService{
     
   }
 
+  
+  //DISPATCHED to OFFERED   -> missing
+
+
+  //OFFERED to IN_PROGRESS
   async acceptWorkOrder(id:number,technician_id:number){
     const order = await this.findOne(id); 
     if(order.status!== WorkOrderStatus.OFFERED){
@@ -110,7 +116,7 @@ export class WorkOrdersService{
     return this.workOrdersRepository.updateStatus(id, WorkOrderStatus.IN_PROGRESS, technician_id); 
   }
 
-  //next 
+ //IN_PROGRESS to COMPLETED
   async completeWorkOrder(id: number, technicianId: number) {
     const order = await this.findOne(id);
     if (order.status !== WorkOrderStatus.IN_PROGRESS) {
@@ -155,6 +161,7 @@ export class WorkOrdersService{
     return this.workOrdersRepository.updateStatus(id, WorkOrderStatus.COMPLETED);
   }
 
+  //COMPLETED to CLOSED
   async closeWorkOrder(id: number, userId: number, userRole: UserRole) {
     const order = await this.findOne(id);
     if (order.status !== WorkOrderStatus.COMPLETED) {

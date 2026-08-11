@@ -22,7 +22,7 @@ export class AssignmentProcessor{
     const {workOrderId} = job.data;
     this.logger.log(`Processing auto-assignment for Work Order #${workOrderId} (Attempt ${job.attemptsMade + 1})`);
     const orderRes = await this.postgresService.query(
-      'select id,status from work-orders where id = $1',[workOrderId],
+      'select id,status from work_orders where id = $1',[workOrderId],
     )
     if (orderRes.rows.length === 0) {
       this.logger.warn(`Work order #${workOrderId} not found. Aborting assignment.`);
