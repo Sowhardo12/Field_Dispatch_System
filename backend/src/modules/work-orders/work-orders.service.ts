@@ -12,9 +12,10 @@ import { WorkOrdersRepository } from './work-orders.repository';
 import { CreateWorkOrderDto, QueryWorkOrderDto } from './dto/work-order.dto';
 import { WorkOrderStatus, UserRole } from '../../common/interfaces/domain.interface';
 // import { WorkLog, WorkLogDocument } from 'src/execution-logs/schemas/work-log-schema';
-import { WorkLog, WorkLogDocument } from 'src/execution-logs/schema/work-log-schema';
+import { WorkLog,WorkLogDocument } from '../../execution-logs/schema/work-log-schema';
 import { WORK_ORDER_QUEUE, AUTO_ASSIGN_JOB } from './assignment.processor';
 import { privateDecrypt } from 'crypto';
+//inside work-orders service
 
 @Injectable()
 export class WorkOrdersService{

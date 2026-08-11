@@ -6,8 +6,8 @@ import { WorkOrdersService } from './work-orders.service';
 import { WorkOrdersRepository } from './work-orders.repository';
 // import { WorkLog, WorkLogSchema } from '../../execution-logs/schemas/work-log.schema';
 // import { WorkLog,WorkLogSchema } from 'src/execution-logs/schemas/work-log-schema';
-import { WorkLog,WorkLogSchema } from 'src/execution-logs/schema/work-log-schema';
-import { PostgresModule } from 'src/database/postgres/postgres.module';
+import { WorkLog,WorkLogSchema } from '../../execution-logs/schema/work-log-schema';
+import { PostgresModule } from '../../database/postgres/postgres.module';
 import { AssignmentProcessor,WORK_ORDER_QUEUE } from './assignment.processor';
 
 @Module({

@@ -6,6 +6,7 @@ import { AppController } from './app.controller';
 import { AuthModule } from './modules/auth/auth.module';
 import { WorkOrdersModule } from './modules/work-orders/work-orders.module';
 import { BullModule } from '@nestjs/bull';
+import { ExecutionLogsModule } from './modules/execution-logs/execution-logs.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { BullModule } from '@nestjs/bull';
     }),
     AuthModule,
     WorkOrdersModule,
+    ExecutionLogsModule,
 
   ],
   controllers: [AppController],
