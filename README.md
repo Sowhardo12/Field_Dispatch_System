@@ -4,6 +4,9 @@ docker-compose up   -> wake up containers
 npm run test
 npm run test:e2e (check db conn, for 2nd time will face error: do : docker-compose down -v)
 
+
+backend health check: http://localhost:3000/api/v1/health
+
   check in running postgres container : 
   docker exec -it dispatch_postgres psql -U postgres -d dispatch_db
   navigate: \dt    -show tables 
@@ -213,3 +216,12 @@ it, mark it as OFFERED, and assign it to a technician who has the least number o
 But the queue wasn't working so the order was never going passed the DISPATCHED status. Then noticed the 
 table name typo, instead of work_orders i wrote work-orders inside raw SQL query. This wouldn't have happened
 if I have used AGENTIC AI or some ORM like typeORM or Prisma. 
+
+
+
+
+information for the frontend to be sent : 
+------------------------------------------
+
+
+
