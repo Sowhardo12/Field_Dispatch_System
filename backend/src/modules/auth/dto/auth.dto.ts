@@ -24,3 +24,15 @@ export class LoginDto {
   @IsString()
   password!: string;
 }
+
+export class RefreshTokenDto {
+  @IsString()
+  @IsNotEmpty()
+  refresh_token!: string;
+}
+
+export class LogoutDto {
+  @IsString()
+  @IsNotEmpty()
+  refresh_token!: string;
+}

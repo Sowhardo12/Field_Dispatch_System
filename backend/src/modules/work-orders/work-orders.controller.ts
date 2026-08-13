@@ -58,6 +58,17 @@ export class WorkOrdersController{
       timestamp: new Date().toISOString(),
     };
   }
+  @Get(':id')
+  @Roles(UserRole.CLIENT, UserRole.DISPATCHER, UserRole.TECHNICIAN, UserRole.ADMIN)
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    const data = await this.workOrdersService.findOne(id);
+    return {
+      success: true,
+      data,
+      error: null,
+      timestamp: new Date().toISOString(),
+    };
+  }
 
   @Patch(':id/dispatch')
   @Roles(UserRole.DISPATCHER,UserRole.ADMIN)
