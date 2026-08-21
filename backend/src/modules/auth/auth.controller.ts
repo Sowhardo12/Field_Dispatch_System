@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode,Get,HttpStatus,UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode,Get,HttpStatus,UseGuards,Headers } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, RefreshTokenDto,LogoutDto } from './dto/auth.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
@@ -43,8 +43,12 @@ export class AuthController {
   }
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Body() dto: LogoutDto) {
-    const result = await this.authService.logout(dto);
+  @UseGuards(JwtAuthGuard)
+  async logout(@Headers('authorization') authHeader: string, @Body() dto: LogoutDto) {
+    console.log('LOGOUT CONTROLLER HIT');
+    console.log('BODY:', dto);
+    const accessToken = authHeader ? authHeader.replace('Bearer ', '') : '';
+    const result = await this.authService.logout(accessToken,dto);
     return {
       success: true,
       data: result,

@@ -6,6 +6,7 @@ import { RegisterDto,LoginDto,RefreshTokenDto,LogoutDto } from './dto/auth.dto';
 import { v4 as uuidv4 } from 'uuid';
 import Redis from 'ioredis';
 import {ConfigService } from '@nestjs/config';
+import { access } from 'fs';
 
 @Injectable()
 export class AuthService {
@@ -162,16 +163,30 @@ export class AuthService {
     };
   }
 
-  async logout(dto:LogoutDto){
+  async logout(accessToken:string,dto:LogoutDto){
     // from refreshtoken, extract payload and then build redisKey, and delete the key 
     try {
-      const payload = this.jwtService.verify(dto.refresh_token);
-      const { sub: userId, tokenId } = payload;
+      const refreshPayload  = this.jwtService.verify(dto.refresh_token);
+  
+      const { sub: userId, tokenId } = refreshPayload;
       const redisKey = `refresh:${userId}:${tokenId}`;
-      await this.redisClient.del(redisKey);
+      await this.redisClient.del(redisKey);  // deleting refreshToken from redis
     } catch {
       return { message: 'Logged out successfully (token already expired)' };
     }
+    //black list access token to prevent hacking
+    try{
+      const accessPayload : any = this.jwtService.decode(accessToken);
+      if(accessPayload && accessPayload.exp){
+        const now = Math.floor(Date.now() / 1000);
+        const ttl = accessPayload.exp - now;
+        if(ttl>0){
+          //if token is still valid during logout
+          const blacklistKey = `blacklist:access:${accessToken}`;
+          await this.redisClient.set(blacklistKey, 'revoked', 'EX', ttl);
+        }
+      }
+    }catch{return { message: 'something went wrong regarding redis' };}
     return { message: 'Logged out successfully' };
 
   }
