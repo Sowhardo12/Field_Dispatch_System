@@ -8,9 +8,10 @@ import { WorkOrdersModule } from './modules/work-orders/work-orders.module';
 import { BullModule } from '@nestjs/bull';
 import { ExecutionLogsModule } from './modules/execution-logs/execution-logs.module';
 import { HealthController } from './modules/health/health.controller';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
-  imports: [
+  imports: [NotificationsModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',

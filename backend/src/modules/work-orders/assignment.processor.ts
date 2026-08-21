@@ -5,6 +5,7 @@ import type { Job } from 'bull';
 // import { PostgresService } from 'src/database/postgres/postgres.service';
 import {PostgresService} from '../../database/postgres/postgres.service'
 import { WorkOrderStatus, UserRole } from '../../common/interfaces/domain.interface';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 
 export const WORK_ORDER_QUEUE = 'work-order-assignment';
 export const  AUTO_ASSIGN_JOB = 'auto-assign';
@@ -16,7 +17,10 @@ interface AutoAssignJobData{
 @Processor(WORK_ORDER_QUEUE)
 export class AssignmentProcessor{
   private readonly logger = new Logger(AssignmentProcessor.name);
-  constructor(@Inject(PostgresService) private readonly postgresService: PostgresService) {}
+
+  constructor(@Inject(PostgresService) private readonly postgresService: PostgresService,
+              private readonly notificationsGateway : NotificationsGateway,
+) {}
   @Process(AUTO_ASSIGN_JOB)
   async handleAutoAssign(job: Job<AutoAssignJobData>){
     const {workOrderId} = job.data;
@@ -47,15 +51,24 @@ export class AssignmentProcessor{
       this.logger.error(`No eligible technicians found for Work Order #${workOrderId}. Retrying via queue backoff...`);
       throw new Error(`No available technician for assignment of work order #${workOrderId}`);
     }
-    const technician_id = findCandidateResult.rows[0].id;
+    // const technician_id = findCandidateResult.rows[0].id;
+    const technician = findCandidateResult.rows[0];
     await this.postgresService.query(
       ` update work_orders
       set technician_id = $1, status = $2, updated_at = CURRENT_TIMESTAMP 
       where id = $3
-      `,[technician_id,WorkOrderStatus.OFFERED,workOrderId],
+      `,[technician.id,WorkOrderStatus.OFFERED,workOrderId],
     );
+    this.notificationsGateway.notifyUser(order.client_id,'TECHNICIAN_ALLOCATED',{
+      work_order_id: order.id,
+      title: order.title,
+      status: WorkOrderStatus.OFFERED,
+      technician:{
+        id:technician.id, full_name:technician.fill_name,
+      },message:`Technician ${technician.full_name} has been matched with your work order: "${order.title}".`,
+    })
     this.logger.log(
-      `Successfully assigned Work Order #${workOrderId} to Technician #${technician_id} (Status: OFFERED)`,
+      `Successfully assigned Work Order #${workOrderId} to Technician #${technician.id} (Status: OFFERED) & notified Client #${order.client_id}`,
     );
   }
 }
