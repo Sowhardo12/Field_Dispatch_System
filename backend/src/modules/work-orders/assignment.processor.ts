@@ -26,7 +26,7 @@ export class AssignmentProcessor{
     const {workOrderId} = job.data;
     this.logger.log(`Processing auto-assignment for Work Order #${workOrderId} (Attempt ${job.attemptsMade + 1})`);
     const orderRes = await this.postgresService.query(
-      'select id,status from work_orders where id = $1',[workOrderId],
+      'select id,status,client_id,title from work_orders where id = $1',[workOrderId],
     )
     if (orderRes.rows.length === 0) {
       this.logger.warn(`Work order #${workOrderId} not found. Aborting assignment.`);
@@ -37,13 +37,15 @@ export class AssignmentProcessor{
       this.logger.warn(`Work order #${workOrderId} status is ${order.status}, expected DISPATCHED. Skipping.`);
       return;
     }
+
+    //not fetching the title and full name 
     const findCandidateQuery = `
-      select u.id,count(w.id) as active_order_count
+      select u.id,u.full_name,count(w.id) as active_order_count
       from users u
       left join work_orders w on u.id = w.technician_id and 
       w.status in ('OFFERED','IN_PROGRESS')
       where u.role = $1
-      group by u.id
+      group by u.id,u.full_name
       order by active_order_count asc limit 1;
     `;
     const findCandidateResult = await this.postgresService.query(findCandidateQuery,[UserRole.TECHNICIAN]);
@@ -64,7 +66,7 @@ export class AssignmentProcessor{
       title: order.title,
       status: WorkOrderStatus.OFFERED,
       technician:{
-        id:technician.id, full_name:technician.fill_name,
+        id:technician.id, full_name:technician.full_name,
       },message:`Technician ${technician.full_name} has been matched with your work order: "${order.title}".`,
     })
     this.logger.log(

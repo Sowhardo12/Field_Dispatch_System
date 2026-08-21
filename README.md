@@ -11,7 +11,13 @@ backend health check: http://localhost:3000/api/v1/health
   docker exec -it dispatch_postgres psql -U postgres -d dispatch_db
   navigate: \dt    -show tables 
 
+  check running mongodb :
+  docker exec -it dispatch_mongodb mongosh
+  show dbs -> use dispatch_db
+  show collections -> db.dispatch_logs.find().pretty()
 
+
+to change JWT token duration go auth.service.ts -> generateTokenPair function
 
 FLOW: 
 
