@@ -23,8 +23,10 @@ export class AssignmentProcessor{
 ) {}
   @Process(AUTO_ASSIGN_JOB)
   async handleAutoAssign(job: Job<AutoAssignJobData>){
+    //get the job id
     const {workOrderId} = job.data;
     this.logger.log(`Processing auto-assignment for Work Order #${workOrderId} (Attempt ${job.attemptsMade + 1})`);
+    //query work order information (client_id,id,status,title)
     const orderRes = await this.postgresService.query(
       'select id,status,client_id,title from work_orders where id = $1',[workOrderId],
     )
@@ -32,13 +34,18 @@ export class AssignmentProcessor{
       this.logger.warn(`Work order #${workOrderId} not found. Aborting assignment.`);
       return;
     }
+    //get the order 
     const order = orderRes.rows[0];
     if (order.status !== WorkOrderStatus.DISPATCHED) {
       this.logger.warn(`Work order #${workOrderId} status is ${order.status}, expected DISPATCHED. Skipping.`);
       return;
     }
 
-    //not fetching the title and full name 
+    //find the best suitable technician 
+    //1. looks at all technicians
+    //2. Counts how many jobs each is currently handling (OFFERED or IN_PROGRESS)
+    //3. Picks the one with the lowest count (least busy)
+    //4. return technician id and name
     const findCandidateQuery = `
       select u.id,u.full_name,count(w.id) as active_order_count
       from users u
@@ -55,6 +62,7 @@ export class AssignmentProcessor{
     }
     // const technician_id = findCandidateResult.rows[0].id;
     const technician = findCandidateResult.rows[0];
+    //allocate the found technician for the job
     await this.postgresService.query(
       ` update work_orders
       set technician_id = $1, status = $2, updated_at = CURRENT_TIMESTAMP 

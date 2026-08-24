@@ -10,6 +10,7 @@ import { ExecutionLogsModule } from './modules/execution-logs/execution-logs.mod
 import { HealthController } from './modules/health/health.controller';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 
+
 @Module({
   imports: [NotificationsModule,
     ConfigModule.forRoot({

@@ -9,6 +9,7 @@ import { WorkOrdersRepository } from './work-orders.repository';
 import { WorkLog,WorkLogSchema } from '../../execution-logs/schema/work-log-schema';
 import { PostgresModule } from '../../database/postgres/postgres.module';
 import { AssignmentProcessor,WORK_ORDER_QUEUE } from './assignment.processor';
+import { AiClassifierService } from './services/ai-classifier';
 
 @Module({
   imports: [PostgresModule,
@@ -16,7 +17,7 @@ import { AssignmentProcessor,WORK_ORDER_QUEUE } from './assignment.processor';
     BullModule.registerQueue({name:WORK_ORDER_QUEUE,}),
   ],
   controllers: [WorkOrdersController],
-  providers: [WorkOrdersService, WorkOrdersRepository,AssignmentProcessor],
+  providers: [WorkOrdersService, WorkOrdersRepository,AssignmentProcessor,AiClassifierService],
   exports: [WorkOrdersService, WorkOrdersRepository],
 })
 export class WorkOrdersModule {}

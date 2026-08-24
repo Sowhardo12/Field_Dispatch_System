@@ -8,13 +8,14 @@ import { PG_CONNECTION } from './database/postgres/postgres.module';
 import { ConfigService } from '@nestjs/config';
 
 
+
 @Controller('health')
 export class AppController {
   private redisClient : Redis;
   constructor(
     @Inject(PG_CONNECTION) private readonly pgPool: Pool,
     @InjectConnection() private readonly mongoConnection: Connection,
-    private readonly configService: ConfigService,
+    private readonly configService: ConfigService
   ) {
     this.redisClient = new Redis({
       host: this.configService.get<string>('REDIS_HOST'),
@@ -59,4 +60,5 @@ export class AppController {
       timestamp: new Date().toISOString(),
     };
   }
+
 }

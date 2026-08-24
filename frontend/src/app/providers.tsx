@@ -4,6 +4,7 @@
 import React, { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
+import { SocketProvider } from "@/context/SocketContext";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -21,8 +22,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <SocketProvider>
       {children}
       <Toaster position="top-right" richColors />
+      </SocketProvider>
     </QueryClientProvider>
   );
 }
