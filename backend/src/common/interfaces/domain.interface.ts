@@ -20,6 +20,8 @@ export interface UserEntity {
   password_hash: string;
   full_name: string;
   role: UserRole;
+  technician_type?: string;  
+  area_name?: string;     
   created_at: Date;
   updated_at: Date;
 }

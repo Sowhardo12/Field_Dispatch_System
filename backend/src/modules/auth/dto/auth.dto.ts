@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 import { UserRole } from '../../../common/interfaces/domain.interface';
 
 export class RegisterDto {
@@ -15,6 +15,14 @@ export class RegisterDto {
 
   @IsEnum(UserRole)
   role!: UserRole;
+
+  @IsOptional()
+  @IsString()
+  technician_type?: string;
+
+  @IsOptional()
+  @IsString()
+  area_name?: string;
 }
 
 export class LoginDto {

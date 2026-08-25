@@ -1,4 +1,40 @@
-/backend 
+/backend
+
+
+
+at hand:
+to test ai:
+
+go to service folder and run :  npx ts-node test-llm.ts
+
+
+
+for now:
+only roles: 
+export const ALLOWED_TECHNICIAN_TYPES = [
+'electrician',
+'plumber',
+'hvac',
+'appliance_repair',
+'it_network',
+'universal',
+] as const;
+
+
+only areas :
+('Dhanmondi', 23.7461, 90.3742),
+('Gulshan', 23.7925, 90.4078),
+('Banani', 23.7937, 90.4047),
+('Mirpur', 23.8223, 90.3654),
+('Uttara', 23.8759, 90.3795),
+('Mohakhali', 23.7772, 90.4005),
+('Badda', 23.7806, 90.4267),
+('Farmgate', 23.7561, 90.3872),
+('Motijheel', 23.7330, 90.4172),
+('Old Dhaka', 23.7099, 90.4071)
+
+
+
 npm run start:dev   -> run backend 
 docker-compose up   -> wake up containers
 npm run test

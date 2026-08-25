@@ -64,6 +64,8 @@ export class AuthService {
       passwordHash,
       dto.full_name,
       dto.role,
+      dto.technician_type,
+      dto.area_name,
     );
 
     const { password_hash, ...userWithoutPassword } = user;

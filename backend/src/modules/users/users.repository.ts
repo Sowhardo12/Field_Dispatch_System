@@ -11,13 +11,15 @@ export class UsersRepository{
     password_hash: string,
     fullName: string,
     role: UserRole,
+    technician_type?:string,
+    area_name?:string,
   ):Promise<UserEntity>{
     const query = `
-      INSERT INTO users (email, password_hash, full_name, role)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, email, password_hash, full_name, role, created_at, updated_at;
+      INSERT INTO users (email, password_hash, full_name, role,technician_type,area_name)
+      VALUES ($1, $2, $3, $4,$5,$6)
+      RETURNING id, email, password_hash, full_name, role, technician_type,area_name, created_at, updated_at;
     `;
-    const values = [email,password_hash,fullName,role];
+    const values = [email,password_hash,fullName,role,technician_type || null, area_name || null];
     const result = await this.pool.query(query,values);
     return result.rows[0];
   }

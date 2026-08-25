@@ -83,7 +83,7 @@ export class WorkOrdersService{
       AUTO_ASSIGN_JOB,
       {workOrderId:id},
       {
-        attempts:5,
+        attempts:10,
         backoff:{
           type:'exponential',delay:2000,
         },removeOnComplete: true,
