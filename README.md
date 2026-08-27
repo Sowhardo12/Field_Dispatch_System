@@ -1,273 +1,188 @@
-/backend
+# Dispatch System — Technician Allocation & Work Order Management
 
+A backend service for dispatching work orders to technicians using automated classification, geolocation-based scoring, and asynchronous queue processing.
 
+## Core Feature: Technician Allocation Algorithm
 
-at hand:
-to test ai:
+When a work order is dispatched, the system automatically finds and assigns the best available technician:
 
-go to service folder and run :  npx ts-node test-llm.ts
+1. **Lock & Validate** — Worker picks up the job, opens a DB transaction, locks the work order row (`FOR UPDATE`), and confirms status is `DISPATCHED`.
+2. **AI Classification** — Determines if the job is `universal` or requires a specific type (`electrician`, `plumber`, `hvac`, `appliance_repair`, `it_network`).
+3. **Candidate Query** — Locks eligible technicians: all technicians for universal jobs, or type-matched + universal technicians otherwise.
+4. **Scoring** — Each candidate scored on:
+   - Distance from client (Haversine formula)
+   - Current active workload (`OFFERED` / `IN_PROGRESS` count)
+5. **Dynamic Sorting**:
+   - Universal jobs → nearest first, then least busy
+   - Specific jobs → least busy first, then nearest
+6. **Assignment** — Top candidate assigned, work order set to `OFFERED`, transaction committed, WebSocket notification sent, connection released.
 
-have to write giving emphasis on technicain finding capability algorithm 
-and the message queue system and why this is needed !!!
+## Why a Message Queue (Bull)?
 
-When a work order enters the queue, a worker picks it up and starts a database transaction, immediately locking the work order row with FOR UPDATE to prevent concurrent assignment. The system verifies the order status is DISPATCHED, then runs it through AI classification to determine if it's a universal job or requires a specific technician type (e.g., plumbing, electrical). Based on this classification, it queries and locks all eligible technicians from the database—either all technicians for universal jobs or only those matching the specific type plus universal technicians. Each candidate is scored by calculating distance from the client using the Haversine formula and counting their current active workload (OFFERED/IN_PROGRESS orders). The system sorts candidates dynamically: universal jobs prioritize nearest technician first then least busy, while specific jobs prioritize least busy first then nearest. The top-scored technician is selected, the work order is updated with their ID and status changed to OFFERED, the transaction is committed atomically, and a WebSocket notification is sent to the client—all while the database connection is released back to the pool.
+- **Non-blocking** — Assignment logic runs off the HTTP request cycle.
+- **Concurrency** — `concurrency: 5` processes multiple assignments in parallel without overloading the DB.
+- **Reliability** — Built-in retries handle transient failures (e.g., no technician available).
+- **Scalability** — Absorbs spikes in work order volume without degrading API responsiveness.
 
+## Work Order Lifecycle
 
-for now:
-only roles: 
+| Step | Actor | Action | Status |
+|---|---|---|---|
+| 1 | Client | Creates order | `CREATED` |
+| 2 | Admin/Dispatcher | Dispatches → added to queue | `DISPATCHED` |
+| 3 | System (queue processor) | Assigns technician | `OFFERED` |
+| 4 | Technician | Accepts (`/accept`) | `IN_PROGRESS` |
+| 5 | Technician | Completes work | `COMPLETED` |
+| 6 | Client/Admin | Closes order | `CLOSED` |
+
+**Business rule:** A technician can only accept an order if its status is `OFFERED`; any other state throws an error.
+
+## Supported Technician Types
+
+```ts
 export const ALLOWED_TECHNICIAN_TYPES = [
-'electrician',
-'plumber',
-'hvac',
-'appliance_repair',
-'it_network',
-'universal',
+  'electrician',
+  'plumber',
+  'hvac',
+  'appliance_repair',
+  'it_network',
+  'universal',
 ] as const;
+```
 
+## Supported Service Areas (Dhaka)
 
-only areas :
-('Dhanmondi', 23.7461, 90.3742),
-('Gulshan', 23.7925, 90.4078),
-('Banani', 23.7937, 90.4047),
-('Mirpur', 23.8223, 90.3654),
-('Uttara', 23.8759, 90.3795),
-('Mohakhali', 23.7772, 90.4005),
-('Badda', 23.7806, 90.4267),
-('Farmgate', 23.7561, 90.3872),
-('Motijheel', 23.7330, 90.4172),
-('Old Dhaka', 23.7099, 90.4071)
+| Area | Latitude | Longitude |
+|---|---|---|
+| Dhanmondi | 23.7461 | 90.3742 |
+| Gulshan | 23.7925 | 90.4078 |
+| Banani | 23.7937 | 90.4047 |
+| Mirpur | 23.8223 | 90.3654 |
+| Uttara | 23.8759 | 90.3795 |
+| Mohakhali | 23.7772 | 90.4005 |
+| Badda | 23.7806 | 90.4267 |
+| Farmgate | 23.7561 | 90.3872 |
+| Motijheel | 23.7330 | 90.4172 |
+| Old Dhaka | 23.7099 | 90.4071 |
 
+## Getting Started
 
+```bash
+docker-compose up          # start Postgres + MongoDB containers
+npm run start:dev          # start backend
+```
 
-npm run start:dev   -> run backend 
-docker-compose up   -> wake up containers
+Health check: `GET http://localhost:3000/api/v1/health`
+
+### Testing
+
+```bash
 npm run test
-npm run test:e2e (check db conn, for 2nd time will face error: do : docker-compose down -v)
+npm run test:e2e           # if run twice, reset DB first: docker-compose down -v
+```
+
+### AI Test Script
+
+```bash
+cd <service-folder>
+npx ts-node test-llm.ts
+```
+
+## Database Access
+
+**Postgres**
+```bash
+docker exec -it dispatch_postgres psql -U postgres -d dispatch_db
+\dt   # list tables
+```
+
+**MongoDB**
+```bash
+docker exec -it dispatch_mongodb mongosh
+show dbs
+use dispatch_db
+show collections
+db.dispatch_logs.find().pretty()
+```
+
+## Config Notes
+
+- JWT token duration: `auth.service.ts` → `generateTokenPair()`
+- `clientId` on order creation is extracted from the JWT payload via `@CurrentUser('id')` decorator (`common/decorator/current-user-decorator.ts`)
+
+## API Reference
+
+### Auth
+
+**Register**
+
+POST /api/v1/auth/register
+Body: { "email": "...", "password": "...", "full_name": "...", "role": "CLIENT" | "ADMIN" | "DISPATCHER" | "TECHNICIAN" }
 
 
-backend health check: http://localhost:3000/api/v1/health
+**Login**
 
-  check in running postgres container : 
-  docker exec -it dispatch_postgres psql -U postgres -d dispatch_db
-  navigate: \dt    -show tables 
-
-  check running mongodb :
-  docker exec -it dispatch_mongodb mongosh
-  show dbs -> use dispatch_db
-  show collections -> db.dispatch_logs.find().pretty()
+POST /api/v1/auth/login
+Body: { "email": "...", "password": "..." }
 
 
-to change JWT token duration go auth.service.ts -> generateTokenPair function
+### Work Orders
 
-FLOW: 
+| Action | Method & Route | Role |
+|---|---|---|
+| Create order | `POST /api/v1/work-orders` | CLIENT |
+| Dispatch order | `PATCH /api/v1/work-orders/:id/dispatch` | ADMIN/DISPATCHER |
+| Accept order | `PATCH /api/v1/work-orders/:id/accept` | TECHNICIAN |
+| Submit execution log | `POST /api/v1/work-orders/:id/logs` | TECHNICIAN |
+| Complete order | `PATCH /api/v1/work-orders/:id/complete` | TECHNICIAN |
+| Close order | `PATCH /api/v1/work-orders/:id/close` | CLIENT/ADMIN |
 
-1. Client Creates order status: CREATED
-2. Admin/Dispatcher accepts and dispatches status: DISPATCHED   -> add to queue  -> processor accepts the work and processes  ->
-3. Assigned to a technician status: OFFERED    
-4. Technician accepts the order status: IN_PROGRESS    /accept
-5. Completed the work status: COMPLETED 
-6. finalized by Client or Admin status: CLOSED 
-
-
-
-logic Decision: in workorder service, when technician wants to accept an order
-what cases should he consider ? 
-
-solution : the technician should only care if the order status is OFFERED, in any
-other case, the code should throw an error. 
-
-
-How do we assign work-order to a technician? on what basis? 
-ans: we order the technician with least active work orders, and choose the first one in the list. 
-
-Problem: Does not consider the type of work, and location
-
-
-The issue was that NestJS couldn't resolve the PG_CONNECTION dependency for PostgresService because when you register a service class directly (providers: [PostgresService]), NestJS has to scan the class at runtime to figure out its dependencies, which sometimes fails due to timing issues or TypeScript metadata problems. I solved it by using an explicit factory provider pattern: instead of letting NestJS figure out the dependencies automatically, I explicitly told it that PostgresService depends on PG_CONNECTION using the inject array, and used a factory function to create the service instance. This made the dependency relationship crystal clear to NestJS, ensured the correct instantiation order (PG_CONNECTION gets created first, then PostgresService), and eliminated any ambiguity in the dependency resolution process.
-
-
-API documentation:  example data is given only
-################################################################################
-Register : 
-url : localhost:3000/api/v1/auth/register
-body: { email: 'client_e2e@test.com', password: 'password123', full_name: 'Client E2E', role: 'CLIENT' }
-
-task: one client, One Dispatcher, One Admin, One Technician creation
-
------------------------------------------------------------------------curl code
-curl -X POST localhost:3000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"asir@gmail.com","password":"password123","full_name":"Client","role":"CLIENT"}'
-
-curl -X POST localhost:3000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"shafim@gmail.com","password":"password123","full_name":"admin","role":"ADMIN"}'
-
-curl -X POST localhost:3000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"ridwan@gmail.com","password":"password123","full_name":"dispatcher","role":"DISPATCHER"}'
-
-curl -X POST localhost:3000/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"siam@gmail.com","password":"password123","full_name":"pipe technician","role":"TECHNICIAN"}'  
-
-
-
-################################################################################
-Login:
-url:  localhost:3000/api/v1/auth/login
-body: { email: 'dispatcher_e2e@test.com', password: 'password123' }
-
-----------------------------------------------------------------------
-///token:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjYsImVtYWlsIjoiYXNpckBnbWFpbC5jb20iLCJyb2xlIjoiQ0xJRU5UIiwiaWF0IjoxNzg2NDc2NzgxLCJleHAiOjE3ODY1NjMxODF9.ypCq1lpyLCuw1TFdcl4jcBD7h84mM-vJJ7znO4xAAnY
-curl -X POST localhost:3000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"asir@gmail.com","password":"password123"}'
-
-
-///token:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjcsImVtYWlsIjoic2hhZmltQGdtYWlsLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc4NjQ3NjgwMCwiZXhwIjoxNzg2NTYzMjAwfQ.TGt7NsYWDAq0MsQ5rhgiZ2_CTZpCOFefQArsS3crEIg
-curl -X POST localhost:3000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"shafim@gmail.com","password":"password123"}'
-
-
-///token:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjgsImVtYWlsIjoicmlkd2FuQGdtYWlsLmNvbSIsInJvbGUiOiJESVNQQVRDSEVSIiwiaWF0IjoxNzg2NDc2ODE0LCJleHAiOjE3ODY1NjMyMTR9.Ela_x9yLyFXp6P3gBJSf16s_Bkr9SCPnDk2sBwFtngI
-curl -X POST localhost:3000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"ridwan@gmail.com","password":"password123"}'
-
-
-///token:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjksImVtYWlsIjoic2lhbUBnbWFpbC5jb20iLCJyb2xlIjoiVEVDSE5JQ0lBTiIsImlhdCI6MTc4NjQ3NjgyNywiZXhwIjoxNzg2NTYzMjI3fQ.hI3CHM-lUEIDZuEM1atrlHyk6jazPtKKKg6jZLag9y8
-curl -X POST localhost:3000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"siam@gmail.com","password":"password123"}'  
-
-
-
-################################################################################
-
-Client Creating Order:  
-localhost:3000/api/v1/work-orders
-body: { title: 'HVAC Repair Unit 4', description: 'AC unit blowing warm air.' } 
-Authorization: Bearer Token
-
-client: asir will order something
+**Create order**
+```bash
 curl -X POST localhost:3000/api/v1/work-orders \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjYsImVtYWlsIjoiYXNpckBnbWFpbC5jb20iLCJyb2xlIjoiQ0xJRU5UIiwiaWF0IjoxNzg2NDc2NzgxLCJleHAiOjE3ODY1NjMxODF9.ypCq1lpyLCuw1TFdcl4jcBD7h84mM-vJJ7znO4xAAnY" \
+  -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"title":"REPAIR AC","description":"AC unit blowing warm air."}'
+```
 
-response : {"success":true,"data":{"id":8,"title":"REPAIR AC","description":"AC unit blowing warm air.","status":"CREATED","client_id":6,"technician_id":null,"created_at":"2026-08-11T19:36:50.678Z","updated_at":"2026-08-11T19:36:50.678Z"},"error":null,"timestamp":"2026-08-11T19:36:50.689Z"}
+**Dispatch**
+```bash
+curl -X PATCH localhost:3000/api/v1/work-orders/:id/dispatch \
+  -H "Authorization: Bearer <token>"
+```
 
-################################################################################
+**Accept**
+```bash
+curl -X PATCH localhost:3000/api/v1/work-orders/:id/accept \
+  -H "Authorization: Bearer <token>"
+```
 
-Dispatcher Dispatches Work Order 
-localhost:3000/api/v1/work-orders/${workOrderId}/dispatch
-Authorization: Bearer Token
-
-Dispatcher : {"email":"ridwan@gmail.com","password":"password123"}  this guy 
-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjgsImVtYWlsIjoicmlkd2FuQGdtYWlsLmNvbSIsInJvbGUiOiJESVNQQVRDSEVSIiwiaWF0IjoxNzg2NDc2ODE0LCJleHAiOjE3ODY1NjMyMTR9.Ela_x9yLyFXp6P3gBJSf16s_Bkr9SCPnDk2sBwFtngI
-
-------------------------------------------------------------------------
-curl -X PATCH localhost:3000/api/v1/work-orders/8/dispatch \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjgsImVtYWlsIjoicmlkd2FuQGdtYWlsLmNvbSIsInJvbGUiOiJESVNQQVRDSEVSIiwiaWF0IjoxNzg2NDc2ODE0LCJleHAiOjE3ODY1NjMyMTR9.Ela_x9yLyFXp6P3gBJSf16s_Bkr9SCPnDk2sBwFtngI"
-
-
-response: {"success":true,"data":{"id":8,"title":"REPAIR AC","description":"AC unit blowing warm air.","status":"DISPATCHED","client_id":6,"technician_id":null,"created_at":"2026-08-11T19:36:50.678Z","updated_at":"2026-08-11T19:42:30.857Z"},"error":null,"timestamp":"2026-08-11T19:42:30.872Z"}
-
-################################################################################
-Technician Accepts Work Order
-localhost:3000/api/v1/work-orders/${workOrderId}/accept
-Authorization: Bearer Token
-
-technician siam will accept
-siams token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjksImVtYWlsIjoic2lhbUBnbWFpbC5jb20iLCJyb2xlIjoiVEVDSE5JQ0lBTiIsImlhdCI6MTc4NjQ3NjgyNywiZXhwIjoxNzg2NTYzMjI3fQ.hI3CHM-lUEIDZuEM1atrlHyk6jazPtKKKg6jZLag9y8
-
-new: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjksImVtYWlsIjoic2lhbUBnbWFpbC5jb20iLCJyb2xlIjoiVEVDSE5JQ0lBTiIsImlhdCI6MTc4NjQ3NzY4OCwiZXhwIjoxNzg2NTY0MDg4fQ.WrHcAh70AeX5z_vmS7iOBurm63dz3XK8q-TZZzdZkPg
-
-curl -X PATCH localhost:3000/api/v1/work-orders/8/accept \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjksImVtYWlsIjoic2lhbUBnbWFpbC5jb20iLCJyb2xlIjoiVEVDSE5JQ0lBTiIsImlhdCI6MTc4NjQ3NzY4OCwiZXhwIjoxNzg2NTY0MDg4fQ.WrHcAh70AeX5z_vmS7iOBurm63dz3XK8q-TZZzdZkPg"
-
-
-
-actually technician sajid accepted work-order : 9 ; technician_id: 3 (userid :3) sajid221@gmail.com password: securepassword123 
-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjMsImVtYWlsIjoic2FqaWQyMjFAZ21haWwuY29tIiwicm9sZSI6IlRFQ0hOSUNJQU4iLCJpYXQiOjE3ODY0ODEzODIsImV4cCI6MTc4NjU2Nzc4Mn0.69rztwqOM7h20p80YitlXqEiPa26cCDwJPONHHUVyZQ
-
-updated accept code: 
-curl -X PATCH localhost:3000/api/v1/work-orders/9/accept \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjMsImVtYWlsIjoic2FqaWQyMjFAZ21haWwuY29tIiwicm9sZSI6IlRFQ0hOSUNJQU4iLCJpYXQiOjE3ODY0ODEzODIsImV4cCI6MTc4NjU2Nzc4Mn0.69rztwqOM7h20p80YitlXqEiPa26cCDwJPONHHUVyZQ"
-
-################################################################################
-Technician submits execution log to MongoDb 
-localhost:3000/api/v1/work-orders/${workOrderId}/logs
-body: {
-checklists: ['Power verified', 'Capacitor replaced', 'Air pressure tested'],
-hardware_metadata: { serial: 'HVAC-9921', refrigerant: 'R410A' },
-technician_notes: 'Replaced faulty dual-run capacitor. Unit operating normally.',
-}
-Authorization: Bearer Token
-
-technician sajids token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjMsImVtYWlsIjoic2FqaWQyMjFAZ21haWwuY29tIiwicm9sZSI6IlRFQ0hOSUNJQU4iLCJpYXQiOjE3ODY0ODEzODIsImV4cCI6MTc4NjU2Nzc4Mn0.69rztwqOM7h20p80YitlXqEiPa26cCDwJPONHHUVyZQ
-
-
-curl -X POST localhost:3000/api/v1/work-orders/9/logs \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjMsImVtYWlsIjoic2FqaWQyMjFAZ21haWwuY29tIiwicm9sZSI6IlRFQ0hOSUNJQU4iLCJpYXQiOjE3ODY0ODEzODIsImV4cCI6MTc4NjU2Nzc4Mn0.69rztwqOM7h20p80YitlXqEiPa26cCDwJPONHHUVyZQ" \
+**Submit log**
+```bash
+curl -X POST localhost:3000/api/v1/work-orders/:id/logs \
+  -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"checklists":["DUST removed","fiter cleaned","Air pressure tested"],"hardware_metadata":{"serial":"HVAC-9921","model":"WALTON R410A"},"technician_notes":"Replaced faulty dual-run capacitor. Unit operating normally."}'
-################################################################################
+  -d '{"checklists":["Power verified","Capacitor replaced"],"hardware_metadata":{"serial":"HVAC-9921","refrigerant":"R410A"},"technician_notes":"Replaced faulty dual-run capacitor."}'
+```
 
-Technician Completes Work Order
-localhost:3000/api/v1/work-orders/${workOrderId}/complete
-Authorization: Bearer Token
+**Complete**
+```bash
+curl -X PATCH localhost:3000/api/v1/work-orders/:id/complete \
+  -H "Authorization: Bearer <token>"
+```
 
+**Close**
+```bash
+curl -X PATCH localhost:3000/api/v1/work-orders/:id/close \
+  -H "Authorization: Bearer <token>"
+```
 
-curl -X PATCH localhost:3000/api/v1/work-orders/9/complete \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjMsImVtYWlsIjoic2FqaWQyMjFAZ21haWwuY29tIiwicm9sZSI6IlRFQ0hOSUNJQU4iLCJpYXQiOjE3ODY0ODEzODIsImV4cCI6MTc4NjU2Nzc4Mn0.69rztwqOM7h20p80YitlXqEiPa26cCDwJPONHHUVyZQ"
-################################################################################
-Client Closes Work Order 
-localhost:3000/api/v1/work-orders/${workOrderId}/close
-Authorization: Bearer Token
+## Known Issues & Fixes (Engineering Log)
 
-admin will close lets say
-admin: shafim token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjcsImVtYWlsIjoic2hhZmltQGdtYWlsLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc4NjQ3NjgwMCwiZXhwIjoxNzg2NTYzMjAwfQ.TGt7NsYWDAq0MsQ5rhgiZ2_CTZpCOFefQArsS3crEIg
+- **`PG_CONNECTION` resolution failure** — NestJS couldn't reliably resolve constructor-injected dependencies for `PostgresService`. Fixed with an explicit factory provider (`inject: [PG_CONNECTION]`) to guarantee instantiation order.
+- **`@CurrentUser` decorator bug** — `if (!request.use)` typo prevented `clientId` extraction; corrected to `if (!request.user)`.
+- **Queue not processing dispatched orders** — Root cause was a raw SQL typo (`work-orders` instead of `work_orders`). Using an ORM (TypeORM/Prisma) would have caught this at compile time instead of silently failing at runtime.
 
-curl -X PATCH localhost:3000/api/v1/work-orders/9/close \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjcsImVtYWlsIjoic2hhZmltQGdtYWlsLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc4NjQ3NjgwMCwiZXhwIjoxNzg2NTYzMjAwfQ.TGt7NsYWDAq0MsQ5rhgiZ2_CTZpCOFefQArsS3crEIg"
-################################################################################
-################################################################################
+## Current Allocation Limitation
 
-
-FULL simulation passed 
-
-
-
-  issue:  to create order, clientId is required, and the clientid is fetched/extracted from the payload 
-  of JWT token 
-
-  CLIENT create order -> work-order.controller[create] -> work-order.service[createWorkOrder] -> 
-  work-order.repository[create] 
-
-  in work order service: @CurrentUser('id') clientId:number, this decorator gets the clientId
-  @CurrentUser('id') clientId:number :-> common/decorator/current-user-decorator.ts file 
-
-  potential bug : if(!request.use) return null;
-correct:if(!request.user) return null;  WORKED
-
-
-
-another issue: When the Order was dispatched by ADMIN/DISPATCHER, it was needed to be OFFERED before 
-being accepted by a TECHNICIAN. So the mechanism was, when order is dispatched, it will be sent on a 
-message queue (background queue) and a Consumer (Processor) will pick up (dequeue) the order and process 
-it, mark it as OFFERED, and assign it to a technician who has the least number of orders completed so far.
-But the queue wasn't working so the order was never going passed the DISPATCHED status. Then noticed the 
-table name typo, instead of work_orders i wrote work-orders inside raw SQL query. This wouldn't have happened
-if I have used AGENTIC AI or some ORM like typeORM or Prisma. 
-
-
-
-
-information for the frontend to be sent : 
-------------------------------------------
-
-
-
+The original allocation logic assigned technicians purely by least active workload, ignoring job type and location. This has since been replaced by the scored, type-aware, distance-weighted algorithm described above.
