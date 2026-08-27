@@ -7,6 +7,10 @@ to test ai:
 
 go to service folder and run :  npx ts-node test-llm.ts
 
+have to write giving emphasis on technicain finding capability algorithm 
+and the message queue system and why this is needed !!!
+
+When a work order enters the queue, a worker picks it up and starts a database transaction, immediately locking the work order row with FOR UPDATE to prevent concurrent assignment. The system verifies the order status is DISPATCHED, then runs it through AI classification to determine if it's a universal job or requires a specific technician type (e.g., plumbing, electrical). Based on this classification, it queries and locks all eligible technicians from the database—either all technicians for universal jobs or only those matching the specific type plus universal technicians. Each candidate is scored by calculating distance from the client using the Haversine formula and counting their current active workload (OFFERED/IN_PROGRESS orders). The system sorts candidates dynamically: universal jobs prioritize nearest technician first then least busy, while specific jobs prioritize least busy first then nearest. The top-scored technician is selected, the work order is updated with their ID and status changed to OFFERED, the transaction is committed atomically, and a WebSocket notification is sent to the client—all while the database connection is released back to the pool.
 
 
 for now:

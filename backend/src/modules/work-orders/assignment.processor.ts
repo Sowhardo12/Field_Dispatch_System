@@ -24,12 +24,16 @@ export class AssignmentProcessor {
     private readonly aiClassifierService: AiClassifierService,
   ) {}
 
-  @Process(AUTO_ASSIGN_JOB)
+  // @Process(AUTO_ASSIGN_JOB)
+  @Process({ name: AUTO_ASSIGN_JOB, concurrency: 5 }) //parallele queue processing
   async handleAutoAssign(job: Job<AutoAssignJobData>) {
     const { workOrderId } = job.data;
     this.logger.log(`Processing auto-assignment for Work Order #${workOrderId} (Attempt ${job.attemptsMade + 1})`);
 
-    // 1. Fetch Work Order Details + JOIN Client User profile to get client's area_name & coordinates
+    //new connection for transaction
+    const client = await this.postgresService.getPool().connect();
+    try{
+    await client.query('BEGIN');
     const orderRes = await this.postgresService.query(
       `SELECT wo.id, wo.status, wo.client_id, wo.title, wo.description,
               client.area_name AS client_area_name,
@@ -37,33 +41,36 @@ export class AssignmentProcessor {
        FROM work_orders wo
        JOIN users client ON wo.client_id = client.id
        LEFT JOIN dhaka_areas da ON LOWER(client.area_name) = LOWER(da.area_name)
-       WHERE wo.id = $1`,
+       WHERE wo.id = $1
+       FOR UPDATE OF wo`,
       [workOrderId],
     );
 
     if (orderRes.rows.length === 0) {
-      this.logger.warn(`Work order #${workOrderId} not found. Aborting assignment.`);
+      this.logger.warn(`Work order #${workOrderId} not found. rolling back.`);
+      await client.query('ROLLBACK');
       return;
     }
 
     const order = orderRes.rows[0];
     if (order.status !== WorkOrderStatus.DISPATCHED) {
       this.logger.warn(`Work order #${workOrderId} status is ${order.status}, expected DISPATCHED. Skipping.`);
+      await client.query('ROLLBACK');
       return;
     }
 
-    // 2. Classify Required Technician Type via Groq AI
+    
     const requiredType = await this.aiClassifierService.classifyWorkOrder(
       order.title,
       order.description,
     );
 
-    // 3. Build Dynamic Candidate Query based on AI Classification
+    
     let findCandidateQuery = '';
     let queryParams: any[] = [UserRole.TECHNICIAN];
 
     if (requiredType === 'universal') {
-      // 🟢 UNIVERSAL FALLBACK: Include ALL active technicians regardless of specialization
+      
       this.logger.log(`Classification is 'universal'. Querying ALL available technicians across all types...`);
       findCandidateQuery = `
         SELECT 
@@ -81,7 +88,7 @@ export class AssignmentProcessor {
         GROUP BY u.id, u.full_name, u.technician_type, u.area_name, da.latitude, da.longitude;
       `;
     } else {
-      // 🎯 SPECIFIC CATEGORY: Filter for tech matching specific type OR 'universal'/NULL
+      
       this.logger.log(`Filtering technicians specialized in [${requiredType}] or [universal]...`);
       findCandidateQuery = `
         SELECT 
@@ -110,10 +117,11 @@ export class AssignmentProcessor {
 
     if (candidatesRes.rows.length === 0) {
       this.logger.error(`No candidate technicians found in the system. Retrying via queue...`);
+      await client.query('ROLLBACK');
       throw new Error(`No available technician found for assignment`);
     }
 
-    // 4. Calculate Distance (in KM) from Client's Area
+    
     const scoredCandidates = candidatesRes.rows.map((tech) => {
       let distanceKm = 999; // Default penalty if area coordinates are missing
 
@@ -133,7 +141,7 @@ export class AssignmentProcessor {
       };
     });
 
-    // 5. Smart Sorting Logic
+    //Sorting Logic
     scoredCandidates.sort((a, b) => {
       if (requiredType === 'universal') {
         // When Universal/Ambiguous: Primary = Proximity (Distance ASC), Secondary = Least Busy
@@ -153,14 +161,14 @@ export class AssignmentProcessor {
     const selectedTechnician = scoredCandidates[0];
 
     // 6. Assign Selected Technician
-    await this.postgresService.query(
+    await client.query(
       `UPDATE work_orders
        SET technician_id = $1, status = $2, updated_at = CURRENT_TIMESTAMP
        WHERE id = $3`,
       [selectedTechnician.id, WorkOrderStatus.OFFERED, workOrderId],
     );
-
-    // 7. Send Real-Time WebSocket Notification to Client
+    await client.query('COMMIT');
+    
     this.notificationsGateway.notifyUser(order.client_id, 'TECHNICIAN_ALLOCATED', {
       work_order_id: order.id,
       title: order.title,
@@ -177,5 +185,12 @@ export class AssignmentProcessor {
     this.logger.log(
       `Successfully assigned Work Order #${workOrderId} -> Tech #${selectedTechnician.id} (${selectedTechnician.full_name}, ${selectedTechnician.distanceKm.toFixed(2)}km away from client in ${order.client_area_name || 'unknown'}, Category: ${selectedTechnician.technician_type || 'universal'})`,
     );
+  }catch(error){
+    await client.query('ROLLBACK');
+      this.logger.error(`Error in parallel assignment worker for Work Order #${workOrderId}: ${error.message}`);
+      throw error;
+  }finally{
+    client.release();
+  }
   }
 }
